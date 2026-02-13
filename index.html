@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JS Jerboa</title>
+<style>
+body { margin:0; font-family:Arial,sans-serif; background:#0f172a; color:white;}
+header { padding:20px; text-align:center; background:#1e293b; font-size:24px; font-weight:bold;}
+.container { display:grid; grid-template-columns:1fr 1fr; gap:15px; padding:20px;}
+textarea, input { width:100%; border:none; border-radius:6px; padding:10px; margin-bottom:10px; font-family:monospace;}
+textarea { height:150px; resize:vertical; background:#1e293b; color:#00ffcc;}
+input { padding:8px;}
+button { background:#00ffcc; border:none; padding:12px; border-radius:8px; cursor:pointer; font-weight:bold; margin-top:5px;}
+button:hover { background:#00ddb3;}
+.preview { grid-column:span 2; background:white; height:300px; border-radius:8px; overflow:auto; color:black; padding:10px;}
+footer { text-align:center; padding:15px; background:#1e293b; font-size:14px;}
+</style>
+</head>
+<body>
+
+<header>Javascript Jerboa</header>
+
+<div class="container">
+    <div>
+        <label> Name</label>
+        <input type="text" id="appName" placeholder="My website or App">
+
+        <label>Background Color</label>
+        <input type="color" id="bgColor" value="#ffffff">
+
+        <label>Theme Color</label>
+        <input type="color" id="themeColor" value="#000000">
+
+        <label>HTML</label>
+        <textarea id="htmlInput"><h1>Hello Javascript Jerboa</h1></textarea>
+
+        <label>CSS</label>
+        <textarea id="cssInput">body { font-family: Arial; }</textarea>
+
+        <label>JavaScript</label>
+        <textarea id="jsInput">console.log("ZIP Ready");</textarea>
+
+        <button id="previewBtn">Preview</button>
+        <button id="downloadBtn">Download  ZIP</button>
+    </div>
+
+    <div class="preview" id="previewArea"></div>
+</div>
+
+<footer>Javascript Jerboa by Skipadoodle (Local-Friendly)</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+const previewArea = document.getElementById('previewArea');
+const previewBtn = document.getElementById('previewBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+
+// ------------------ Preview ------------------
+function updatePreview() {
+    const html = document.getElementById('htmlInput').value;
+    const css = document.getElementById('cssInput').value;
+    const js = document.getElementById('jsInput').value;
+
+    // Inject HTML + CSS
+    previewArea.innerHTML = `<style>${css}</style>${html}`;
+
+    // Inject JS dynamically
+    const script = document.createElement('script');
+    script.textContent = js;
+    previewArea.appendChild(script);
+}
+
+previewBtn.addEventListener('click', updatePreview);
+
+// ------------------ Download PWA ZIP ------------------
+async function generatePWA() {
+    if(typeof JSZip === 'undefined'){ alert("JSZip not loaded!"); return; }
+
+    const zip = new JSZip();
+    const appName = document.getElementById("appName").value || "My PWA App";
+    const bgColor = document.getElementById("bgColor").value;
+    const themeColor = document.getElementById("themeColor").value;
+    const html = document.getElementById("htmlInput").value;
+    const css = document.getElementById("cssInput").value;
+    const js = document.getElementById("jsInput").value;
+
+    // Create icons dynamically
+    function makeIcon(size){
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = themeColor; ctx.fillRect(0,0,size,size);
+        ctx.fillStyle = 'white';
+        ctx.font = (size/2.5)+'px Arial';
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(appName[0]||'A', size/2, size/2);
+        return canvas.toDataURL().split(',')[1];
+    }
+
+    zip.file("icon-192.png", makeIcon(192), {base64:true});
+    zip.file("icon-512.png", makeIcon(512), {base64:true});
+
+    const indexFile = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="${themeColor}">
+<title>${appName}</title>
+<style>${css}</style>
+</head>
+<body>
+${html}
+<script>${js}<\/script>
+</body>
+</html>
+`;
+
+    const manifest = `
+{
+  "name":"${appName}",
+  "short_name":"${appName}",
+  "start_url":".",
+  "display":"standalone",
+  "background_color":"${bgColor}",
+  "theme_color":"${themeColor}",
+  "icons":[
+    {"src":"icon-192.png","sizes":"192x192","type":"image/png"},
+    {"src":"icon-512.png","sizes":"512x512","type":"image/png"}
+  ]
+}
+`;
+
+    const serviceWorker = `
+self.addEventListener('install', e=>{
+    e.waitUntil(
+        caches.open('pwa-cache').then(cache=>cache.addAll(['./','index.html','manifest.json']))
+    );
+});
+self.addEventListener('fetch', e=>{
+    e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));
+});
+`;
+
+    zip.file("index.html", indexFile);
+    zip.file("manifest.json", manifest);
+    zip.file("service-worker.js", serviceWorker);
+
+    const content = await zip.generateAsync({type:"blob"});
+
+    // Trigger download
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(content);
+    a.download = "jerboa.zip";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+downloadBtn.addEventListener('click', generatePWA);
+</script>
+</body>
+</html>
